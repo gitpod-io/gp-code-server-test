@@ -1,0 +1,27 @@
+{
+    "version": "2.0.0",
+    "command": "npm",
+    "isBackground": true,
+    "args": [
+        "run",
+        "watch"
+    ],
+    "problemMatcher": "$tsc-watch",
+    "tasks": [
+        {
+            "label": "npm",
+            "type": "shell",
+            "command": "npm",
+            "args": [
+                "run",
+                "watch"
+            ],
+            "isBackground": true,
+            "problemMatcher": "$tsc-watch",
+            "group": {
+                "isDefault": true,
+                "kind": "build"
+            }
+        }
+    ]
+}
