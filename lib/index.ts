@@ -13,7 +13,6 @@ const optimist = optimistLib
 	.describe('workspacePath', 'path to the workspace (folder or *.code-workspace file) to open in the test').string('workspacePath')
 	.describe('extensionDevelopmentPath', 'path to the extension to test').string('extensionDevelopmentPath')
 	.describe('extensionTestsPath', 'path to the extension tests').string('extensionTestsPath')
-	.describe('debug', 'do not run browsers headless').boolean('debug')
 	.describe('browser', 'browser in which integration tests should run').string('browser').default('browser', 'chromium')
 	.describe('help', 'show the help').alias('help', 'h');
 
@@ -28,8 +27,21 @@ const height = 800;
 type BrowserType = 'chromium' | 'firefox' | 'webkit';
 
 async function runTestsInBrowser(browserType: BrowserType, endpoint: url.UrlWithStringQuery, server: cp.ChildProcess | undefined): Promise<void> {
-	const browser = await playwright[browserType].launch({ headless: !Boolean(optimist.argv.debug) });
+	const browser = await playwright[browserType].launch({ headless: true });
 	const context = await browser.newContext();
+
+	// Required for gitpod authentication
+    if (process.env.AUTH_COOKIE) {
+        const authCookie = JSON.parse(process.env.AUTH_COOKIE);
+        if (typeof authCookie.expires === 'string') {
+            authCookie.expires = +((new Date(authCookie.expires).getTime() / 1000).toFixed(0));
+        }
+        if (typeof authCookie.sameSite === 'string') {
+            authCookie.sameSite = authCookie.sameSite.charAt(0).toUpperCase() + authCookie.sameSite.slice(1);
+        }
+        await context.addCookies([authCookie]);
+    }
+
 	const page = await context.newPage();
 	await page.setViewportSize({ width, height });
 
@@ -110,6 +122,9 @@ function pkill(pid: number): Promise<void> {
 }
 
 async function launchServer(browserType: BrowserType): Promise<{ endpoint: url.UrlWithStringQuery, server: cp.ChildProcess }> {
+    if (!process.env.VSCODE_REMOTE_SERVER_PATH) {
+        return Promise.reject(new Error('VSCODE_REMOTE_SERVER_PATH env variable not provided'));
+    }
 
 	// Ensure a tmp user-data-dir is used for the tests
 	const tmpDir = tmp.dirSync({ prefix: 't' });
@@ -124,44 +139,15 @@ async function launchServer(browserType: BrowserType): Promise<{ endpoint: url.U
 		...process.env
 	};
 
-	const root = path.join(__dirname, '..', '..', '..', '..');
-	const logsPath = path.join(root, '.build', 'logs', 'integration-tests-browser');
-
 	const serverArgs = ['--browser', 'none', '--driver', 'web', '--enable-proposed-api', '--disable-telemetry'];
-
-	let serverLocation: string;
-	if (process.env.VSCODE_REMOTE_SERVER_PATH) {
-		serverLocation = path.join(process.env.VSCODE_REMOTE_SERVER_PATH, `server.${process.platform === 'win32' ? 'cmd' : 'sh'}`);
-		serverArgs.push(`--logsPath=${logsPath}`);
-
-		if (optimist.argv.debug) {
-			console.log(`Starting built server from '${serverLocation}'`);
-			console.log(`Storing log files into '${logsPath}'`);
-		}
-	} else {
-		serverLocation = path.join(root, `resources/server/web.${process.platform === 'win32' ? 'bat' : 'sh'}`);
-		serverArgs.push('--logsPath', logsPath);
-		process.env.VSCODE_DEV = '1';
-
-		if (optimist.argv.debug) {
-			console.log(`Starting server out of sources from '${serverLocation}'`);
-			console.log(`Storing log files into '${logsPath}'`);
-		}
-	}
-
-	const stdio: cp.StdioOptions = optimist.argv.debug ? 'pipe' : ['ignore', 'pipe', 'ignore'];
+	const serverLocation = path.join(process.env.VSCODE_REMOTE_SERVER_PATH, `server.${process.platform === 'win32' ? 'cmd' : 'sh'}`);
+	const stdio: cp.StdioOptions = ['ignore', 'pipe', 'ignore'];
 
 	let serverProcess = cp.spawn(
 		serverLocation,
 		serverArgs,
 		{ env, stdio }
 	);
-
-	if (optimist.argv.debug) {
-		serverProcess.stderr!.on('data', error => console.log(`Server stderr: ${error}`));
-		serverProcess.stdout!.on('data', data => console.log(`Server stdout: ${data}`));
-	}
-
 	process.on('exit', () => serverProcess.kill());
 	process.on('SIGINT', () => serverProcess.kill());
 	process.on('SIGTERM', () => serverProcess.kill());
