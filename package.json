@@ -1,6 +1,6 @@
 {
   "name": "openvscode-server-test",
-  "version": "0.1.6",
+  "version": "0.1.9",
   "scripts": {
     "compile": "tsc -p ./",
     "watch": "tsc -w -p ./",

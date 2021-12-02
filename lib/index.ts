@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import * as path from 'path';
 import * as cp from 'child_process';
 import * as playwright from 'playwright';
@@ -9,7 +11,8 @@ import * as kill from 'tree-kill';
 import * as optimistLib from 'optimist';
 
 const optimist = optimistLib
-    .describe('endpoint', 'Url to and already running server').string('endpoint')
+	.describe('endpoint', 'Url to and already running server').string('endpoint')
+	.describe('authCookie', 'Cookie to authenticate').string('authCookie')
 	.describe('workspacePath', 'path to the workspace (folder or *.code-workspace file) to open in the test').string('workspacePath')
 	.describe('extensionDevelopmentPath', 'path to the extension to test').string('extensionDevelopmentPath')
 	.describe('extensionTestsPath', 'path to the extension tests').string('extensionTestsPath')
@@ -31,16 +34,17 @@ async function runTestsInBrowser(browserType: BrowserType, endpoint: url.UrlWith
 	const context = await browser.newContext();
 
 	// Required for gitpod authentication
-    if (process.env.AUTH_COOKIE) {
-        const authCookie = JSON.parse(process.env.AUTH_COOKIE);
-        if (typeof authCookie.expires === 'string') {
-            authCookie.expires = +((new Date(authCookie.expires).getTime() / 1000).toFixed(0));
-        }
-        if (typeof authCookie.sameSite === 'string') {
-            authCookie.sameSite = authCookie.sameSite.charAt(0).toUpperCase() + authCookie.sameSite.slice(1);
-        }
-        await context.addCookies([authCookie]);
-    }
+	const authCookieStr = optimist.argv.authCookie || process.env.AUTH_COOKIE;
+	if (authCookieStr) {
+		const authCookie = JSON.parse(authCookieStr);
+		if (typeof authCookie.expires === 'string') {
+			authCookie.expires = +((new Date(authCookie.expires).getTime() / 1000).toFixed(0));
+		}
+		if (typeof authCookie.sameSite === 'string') {
+			authCookie.sameSite = authCookie.sameSite.charAt(0).toUpperCase() + authCookie.sameSite.slice(1);
+		}
+		await context.addCookies([authCookie]);
+	}
 
 	const page = await context.newPage();
 	await page.setViewportSize({ width, height });
@@ -89,13 +93,13 @@ async function runTestsInBrowser(browserType: BrowserType, endpoint: url.UrlWith
 			console.error(`Error when closing browser: ${error}`);
 		}
 
-        if (server) {
-            try {
-                await pkill(server.pid);
-            } catch (error) {
-                console.error(`Error when killing server process tree: ${error}`);
-            }
-        }
+		if (server) {
+			try {
+				await pkill(server.pid);
+			} catch (error) {
+				console.error(`Error when killing server process tree: ${error}`);
+			}
+		}
 
 		process.exit(code);
 	});
@@ -122,9 +126,9 @@ function pkill(pid: number): Promise<void> {
 }
 
 async function launchServer(browserType: BrowserType): Promise<{ endpoint: url.UrlWithStringQuery, server: cp.ChildProcess }> {
-    if (!process.env.VSCODE_REMOTE_SERVER_PATH) {
-        return Promise.reject(new Error('VSCODE_REMOTE_SERVER_PATH env variable not provided'));
-    }
+	if (!process.env.VSCODE_REMOTE_SERVER_PATH) {
+		return Promise.reject(new Error('VSCODE_REMOTE_SERVER_PATH env variable not provided'));
+	}
 
 	// Ensure a tmp user-data-dir is used for the tests
 	const tmpDir = tmp.dirSync({ prefix: 't' });
@@ -162,16 +166,19 @@ async function launchServer(browserType: BrowserType): Promise<{ endpoint: url.U
 	});
 }
 
-let serverPromise: Promise<{ endpoint: url.UrlWithStringQuery, server: cp.ChildProcess | undefined}>;
+let serverPromise: Promise<{ endpoint: url.UrlWithStringQuery, server: cp.ChildProcess | undefined }>;
 if (optimist.argv.endpoint) {
-    serverPromise = Promise.resolve({ endpoint: url.parse(optimist.argv.endpoint), server: undefined})
+	serverPromise = Promise.resolve({ endpoint: url.parse(optimist.argv.endpoint), server: undefined })
 } else {
-    serverPromise = launchServer(optimist.argv.browser);
+	serverPromise = launchServer(optimist.argv.browser);
 }
 
-serverPromise.then(async ({ endpoint, server }) => {
-	return runTestsInBrowser(optimist.argv.browser, endpoint, server);
-}, error => {
-	console.error(error);
-	process.exit(1);
-});
+serverPromise.then(
+	({ endpoint, server }) => {
+		return runTestsInBrowser(optimist.argv.browser, endpoint, server);
+	},
+	error => {
+		console.error(error);
+		process.exit(1);
+	}
+);
