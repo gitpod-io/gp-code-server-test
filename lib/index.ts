@@ -36,7 +36,8 @@ async function runTestsInBrowser(browserType: BrowserType, endpoint: url.UrlWith
 	// Required for gitpod authentication
 	const authCookieStr = optimist.argv.authCookie || process.env.AUTH_COOKIE;
 	if (authCookieStr) {
-		const authCookie = JSON.parse(authCookieStr);
+		const decodedCookie = Buffer.from(authCookieStr, 'base64').toString();
+		const authCookie = JSON.parse(decodedCookie);
 		if (typeof authCookie.expires === 'string') {
 			authCookie.expires = +((new Date(authCookie.expires).getTime() / 1000).toFixed(0));
 		}
