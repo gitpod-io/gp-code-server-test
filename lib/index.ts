@@ -9,6 +9,7 @@ import * as rimraf from 'rimraf';
 import { URI } from 'vscode-uri';
 import * as kill from 'tree-kill';
 import * as optimistLib from 'optimist';
+import { promisify } from 'util';
 
 const optimist = optimistLib
 	.describe('endpoint', 'Url to and already running server').string('endpoint')
@@ -59,7 +60,9 @@ async function runTestsInBrowser(browserType: BrowserType, endpoint: url.UrlWith
 	});
 	page.on('console', async msg => {
 		try {
-			consoleLogFn(msg)(msg.text(), await Promise.all(msg.args().map(async arg => await arg.jsonValue())));
+			if (msg.type() === 'error' || msg.type() === 'warning') {
+				consoleLogFn(msg)(msg.text(), await Promise.all(msg.args().map(async arg => await arg.jsonValue())));
+			}
 		} catch (err) {
 			console.error('Error logging console', err);
 		}
@@ -75,7 +78,7 @@ async function runTestsInBrowser(browserType: BrowserType, endpoint: url.UrlWith
 	const testExtensionUri = url.format({ pathname: URI.file(path.resolve(optimist.argv.extensionDevelopmentPath)).path, protocol, host, slashes: true });
 	const testFilesUri = url.format({ pathname: URI.file(path.resolve(optimist.argv.extensionTestsPath)).path, protocol, host, slashes: true });
 
-	const payloadParam = `[["extensionDevelopmentPath","${testExtensionUri}"],["extensionTestsPath","${testFilesUri}"],["enableProposedApi",""],["webviewExternalEndpointCommit","5f19eee5dc9588ca96192f89587b5878b7d7180d"],["skipWelcome","true"]]`;
+	const payloadParam = `[["extensionDevelopmentPath","${testExtensionUri}"],["extensionTestsPath","${testFilesUri}"],["enableProposedApi",""],["webviewExternalEndpointCommit","c42793d0357ff9c6589cce79a847177fd42852ee"],["skipWelcome","true"]]`;
 
 	if (path.extname(testWorkspaceUri) === '.code-workspace') {
 		await page.goto(`${endpoint.href}?workspace=${testWorkspaceUri}&payload=${payloadParam}`);
@@ -96,9 +99,9 @@ async function runTestsInBrowser(browserType: BrowserType, endpoint: url.UrlWith
 
 		if (server) {
 			try {
-				await pkill(server.pid);
+				await promisify(kill)(server.pid);
 			} catch (error) {
-				console.error(`Error when killing server process tree: ${error}`);
+				console.error(`Error when killing server process tree (pid: ${server.pid}): ${error}`);
 			}
 		}
 
@@ -118,12 +121,6 @@ function consoleLogFn(msg: playwright.ConsoleMessage) {
 	}
 
 	return console.log;
-}
-
-function pkill(pid: number): Promise<void> {
-	return new Promise((c, e) => {
-		kill(pid, error => error ? e(error) : c());
-	});
 }
 
 async function launchServer(browserType: BrowserType): Promise<{ endpoint: url.UrlWithStringQuery, server: cp.ChildProcess }> {
