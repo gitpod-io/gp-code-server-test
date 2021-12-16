@@ -6,7 +6,7 @@
             "ES2019"
         ],
         "outDir": "out",
-        "declaration": true,
+        "declaration": false,
         "strict": true,
         "noImplicitAny": true,
         "noImplicitThis": true,

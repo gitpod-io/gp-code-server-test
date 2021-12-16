@@ -12,7 +12,7 @@ import * as optimistLib from 'optimist';
 import { promisify } from 'util';
 
 const optimist = optimistLib
-	.describe('endpoint', 'Url to and already running server').string('endpoint')
+	.describe('endpoint', 'Url to a running server').string('endpoint')
 	.describe('authCookie', 'Cookie to authenticate').string('authCookie')
 	.describe('workspacePath', 'path to the workspace (folder or *.code-workspace file) to open in the test').string('workspacePath')
 	.describe('extensionDevelopmentPath', 'path to the extension to test').string('extensionDevelopmentPath')

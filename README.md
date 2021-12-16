@@ -1,6 +1,6 @@
-# openvscode-server-test
+# gp-code-server-test
 
-This module helps you test VS Code extensions.
+This module helps you test gp-code inside a workspace.
 
 
 ## License
