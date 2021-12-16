@@ -1,6 +1,6 @@
 {
-  "name": "openvscode-server-test",
-  "version": "0.1.11",
+  "name": "gp-code-server-test",
+  "version": "0.1.12",
   "scripts": {
     "compile": "tsc -p ./",
     "watch": "tsc -w -p ./",
@@ -9,7 +9,7 @@
   },
   "main": "./out/index.js",
   "bin": {
-    "openvscode-server-test": "./out/index.js"
+    "gp-code-server-test": "./out/index.js"
   },
   "engines": {
     "node": ">=12.22.7"
@@ -34,12 +34,12 @@
     "typescript": "^4.3.5"
   },
   "license": "MIT",
-  "author": "Jean Pierre",
+  "author": "Gitpod",
   "repository": {
     "type": "git",
-    "url": "https://github.com/jeanp413/openvscode-server-test"
+    "url": "https://github.com/gitpod-io/gp-code-server-test"
   },
   "bugs": {
-    "url": "https://github.com/jeanp413/openvscode-server-test/issues"
+    "url": "https://github.com/gitpod-io/gp-code-server-test/issues"
   }
 }
