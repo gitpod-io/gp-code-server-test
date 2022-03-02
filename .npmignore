@@ -1,5 +1,7 @@
 .vscode
 .gitignore
+.gitpod.yml
+.eslintrc.js
 src/
 **/*.js.map
 yarn.lock
