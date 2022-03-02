@@ -2,8 +2,8 @@
 .gitignore
 .gitpod.yml
 .eslintrc.js
-src/
 **/*.js.map
 yarn.lock
 tsconfig.json
 tslint.json
+src/
