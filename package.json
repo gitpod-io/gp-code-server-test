@@ -1,6 +1,6 @@
 {
   "name": "gp-code-server-test",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "scripts": {
     "compile": "tsc -p ./",
     "watch": "tsc -w -p ./",

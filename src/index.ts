@@ -29,13 +29,17 @@ const height = 800;
 
 type BrowserType = 'chromium' | 'firefox' | 'webkit';
 
-async function runTestsInBrowser(browserType: BrowserType, endpoint: url.UrlWithStringQuery, server: cp.ChildProcess | undefined): Promise<void> {
-	const browser = await playwright[browserType].launch({ headless: true });
-	const context = await browser.newContext();
-	const page = await context.newPage();
-	await page.setViewportSize({ width, height });
-
-	// Required for gitpod authentication
+function getAuthCookie(): {
+	name: string;
+	value: string;
+	url?: string;
+	domain?: string;
+	path?: string;
+	expires?: number;
+	httpOnly?: boolean;
+	secure?: boolean;
+	sameSite?: "Strict" | "Lax" | "None";
+} | undefined {
 	const authCookieStr = optimist.argv.authCookie || process.env.AUTH_COOKIE;
 	if (authCookieStr) {
 		const decodedCookie = Buffer.from(authCookieStr, 'base64').toString();
@@ -46,8 +50,21 @@ async function runTestsInBrowser(browserType: BrowserType, endpoint: url.UrlWith
 		if (typeof authCookie.sameSite === 'string') {
 			authCookie.sameSite = authCookie.sameSite.charAt(0).toUpperCase() + authCookie.sameSite.slice(1);
 		}
+		return authCookie
+	}
+	return undefined;
+}
+
+async function runTestsInBrowser(browserType: BrowserType, endpoint: url.UrlWithStringQuery, server: cp.ChildProcess | undefined): Promise<void> {
+	const browser = await playwright[browserType].launch({ headless: true });
+	const context = await browser.newContext();
+	// Required for gitpod authentication
+	const authCookie = getAuthCookie();
+	if (authCookie) {
 		await context.addCookies([authCookie]);
 	}
+	const page = await context.newPage();
+	await page.setViewportSize({ width, height });
 
 	page.on('pageerror', async error => console.error(`Playwright ERROR: page error: ${error}`));
 	page.on('crash', () => console.error('Playwright ERROR: page crash'));
