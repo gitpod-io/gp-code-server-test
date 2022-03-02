@@ -1,5 +1,7 @@
 .vscode
-.npmignore
-lib/
+.gitignore
+src/
+**/*.js.map
+yarn.lock
 tsconfig.json
 tslint.json

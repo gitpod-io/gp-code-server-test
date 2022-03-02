@@ -1,8 +1,6 @@
-#!/usr/bin/env node
-
 import * as path from 'path';
 import * as cp from 'child_process';
-import * as playwright from 'playwright';
+import * as playwright from '@playwright/test';
 import * as url from 'url';
 import * as tmp from 'tmp';
 import * as rimraf from 'rimraf';
@@ -17,6 +15,7 @@ const optimist = optimistLib
 	.describe('workspacePath', 'path to the workspace (folder or *.code-workspace file) to open in the test').string('workspacePath')
 	.describe('extensionDevelopmentPath', 'path to the extension to test').string('extensionDevelopmentPath')
 	.describe('extensionTestsPath', 'path to the extension tests').string('extensionTestsPath')
+	.describe('debug', 'do not run browsers headless').boolean('debug')
 	.describe('browser', 'browser in which integration tests should run').string('browser').default('browser', 'chromium')
 	.describe('help', 'show the help').alias('help', 'h');
 
@@ -33,6 +32,8 @@ type BrowserType = 'chromium' | 'firefox' | 'webkit';
 async function runTestsInBrowser(browserType: BrowserType, endpoint: url.UrlWithStringQuery, server: cp.ChildProcess | undefined): Promise<void> {
 	const browser = await playwright[browserType].launch({ headless: true });
 	const context = await browser.newContext();
+	const page = await context.newPage();
+	await page.setViewportSize({ width, height });
 
 	// Required for gitpod authentication
 	const authCookieStr = optimist.argv.authCookie || process.env.AUTH_COOKIE;
@@ -48,11 +49,8 @@ async function runTestsInBrowser(browserType: BrowserType, endpoint: url.UrlWith
 		await context.addCookies([authCookie]);
 	}
 
-	const page = await context.newPage();
-	await page.setViewportSize({ width, height });
-
 	page.on('pageerror', async error => console.error(`Playwright ERROR: page error: ${error}`));
-	page.on('crash', page => console.error('Playwright ERROR: page crash'));
+	page.on('crash', () => console.error('Playwright ERROR: page crash'));
 	page.on('response', async response => {
 		if (response.status() >= 400) {
 			console.error(`Playwright ERROR: HTTP status ${response.status()} for ${response.url()}`);
@@ -74,16 +72,16 @@ async function runTestsInBrowser(browserType: BrowserType, endpoint: url.UrlWith
 	const host = endpoint.host;
 	const protocol = 'vscode-remote';
 
-	const testWorkspaceUri = url.format({ pathname: URI.file(path.resolve(optimist.argv.workspacePath)).path, protocol, host, slashes: true });
+	const testWorkspacePath = URI.file(path.resolve(optimist.argv.workspacePath)).path;
 	const testExtensionUri = url.format({ pathname: URI.file(path.resolve(optimist.argv.extensionDevelopmentPath)).path, protocol, host, slashes: true });
 	const testFilesUri = url.format({ pathname: URI.file(path.resolve(optimist.argv.extensionTestsPath)).path, protocol, host, slashes: true });
 
-	const payloadParam = `[["extensionDevelopmentPath","${testExtensionUri}"],["extensionTestsPath","${testFilesUri}"],["enableProposedApi",""],["webviewExternalEndpointCommit","c42793d0357ff9c6589cce79a847177fd42852ee"],["skipWelcome","true"]]`;
+	const payloadParam = `[["extensionDevelopmentPath","${testExtensionUri}"],["extensionTestsPath","${testFilesUri}"],["enableProposedApi",""],["skipWelcome","true"]]`;
 
-	if (path.extname(testWorkspaceUri) === '.code-workspace') {
-		await page.goto(`${endpoint.href}?workspace=${testWorkspaceUri}&payload=${payloadParam}`);
+	if (path.extname(testWorkspacePath) === '.code-workspace') {
+		await page.goto(`${endpoint.href}&workspace=${testWorkspacePath}&payload=${payloadParam}`);
 	} else {
-		await page.goto(`${endpoint.href}?folder=${testWorkspaceUri}&payload=${payloadParam}`);
+		await page.goto(`${endpoint.href}&folder=${testWorkspacePath}&payload=${payloadParam}`);
 	}
 
 	await page.exposeFunction('codeAutomationLog', (type: string, args: any[]) => {
@@ -99,7 +97,7 @@ async function runTestsInBrowser(browserType: BrowserType, endpoint: url.UrlWith
 
 		if (server) {
 			try {
-				await promisify(kill)(server.pid);
+				await promisify(kill)(server.pid!);
 			} catch (error) {
 				console.error(`Error when killing server process tree (pid: ${server.pid}): ${error}`);
 			}
@@ -136,23 +134,36 @@ async function launchServer(browserType: BrowserType): Promise<{ endpoint: url.U
 	const userDataDir = path.join(testDataPath, 'd');
 
 	const env = {
-		VSCODE_AGENT_FOLDER: userDataDir,
 		VSCODE_BROWSER: browserType,
 		...process.env
 	};
 
-	const serverArgs = ['--browser', 'none', '--driver', 'web', '--enable-proposed-api', '--disable-telemetry'];
-	const serverLocation = path.join(process.env.VSCODE_REMOTE_SERVER_PATH, `server.${process.platform === 'win32' ? 'cmd' : 'sh'}`);
-	const stdio: cp.StdioOptions = ['ignore', 'pipe', 'ignore'];
+	const serverArgs = ['--driver', 'web', '--enable-proposed-api', '--disable-telemetry', '--server-data-dir', userDataDir];
+	const { serverApplicationName } = require(path.join(process.env.VSCODE_REMOTE_SERVER_PATH, 'product.json'));
+	const serverLocation = path.join(process.env.VSCODE_REMOTE_SERVER_PATH, 'bin', `${serverApplicationName}${process.platform === 'win32' ? '.cmd' : ''}`);
 
-	let serverProcess = cp.spawn(
+	const stdio: cp.StdioOptions = optimist.argv.debug ? 'pipe' : ['ignore', 'pipe', 'ignore'];
+
+	const serverProcess = cp.spawn(
 		serverLocation,
 		serverArgs,
 		{ env, stdio }
 	);
+
+	if (optimist.argv.debug) {
+		serverProcess.stderr!.on('data', error => console.log(`Server stderr: ${error}`));
+		serverProcess.stdout!.on('data', data => console.log(`Server stdout: ${data}`));
+	}
+
 	process.on('exit', () => serverProcess.kill());
-	process.on('SIGINT', () => serverProcess.kill());
-	process.on('SIGTERM', () => serverProcess.kill());
+	process.on('SIGINT', () => {
+		serverProcess.kill();
+		process.exit(128 + 2); // https://nodejs.org/docs/v14.16.0/api/process.html#process_signal_events
+	});
+	process.on('SIGTERM', () => {
+		serverProcess.kill();
+		process.exit(128 + 15); // https://nodejs.org/docs/v14.16.0/api/process.html#process_signal_events
+	});
 
 	return new Promise(c => {
 		serverProcess.stdout!.on('data', data => {

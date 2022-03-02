@@ -5,7 +5,8 @@
         "lib": [
             "ES2019"
         ],
-        "outDir": "out",
+        "rootDir": "./src",
+        "outDir": "./out",
         "declaration": false,
         "strict": true,
         "noImplicitAny": true,
@@ -13,10 +14,11 @@
         "noUnusedLocals": true,
         "alwaysStrict": true,
         "skipLibCheck": true,
-        "forceConsistentCasingInFileNames": true
+        "forceConsistentCasingInFileNames": true,
+        "sourceMap": true
     },
     "include": [
-        "lib"
+        "src"
     ],
     "exclude": [
         "node_modules"
